@@ -78,25 +78,35 @@ async function refreshRooms() {
     if (!Array.isArray(rooms)) throw new Error('bad payload');
   } catch {
     if (!list.querySelector('li:not(.placeholder)')) {
-      list.innerHTML = '<li class="placeholder">Can\'t reach the server — retrying…</li>';
+      list.innerHTML = '<li class="placeholder">can\'t reach the server — retrying…</li>';
     }
     return;
   }
 
   if (rooms.length === 0) {
-    list.innerHTML = '<li class="placeholder">No rooms configured.</li>';
+    list.innerHTML = '<li class="placeholder">no rooms configured.</li>';
     return;
   }
 
   list.innerHTML = '';
   for (const r of rooms) {
     const li = document.createElement('li');
+    li.className = 'room-row';
     li.addEventListener('click', () => joinRoom(r.name));
     const count = r.users.length;
-    const summary = count === 0
-      ? 'empty'
-      : `${count} · ${r.users.map(escapeHtml).join(', ')}`;
-    li.innerHTML = `<div class="room-name">${escapeHtml(r.name)}</div><div class="room-users">${summary}</div>`;
+    const occupants = count === 0
+      ? '<span class="room-users dim">empty</span>'
+      : `<span class="room-users">${escapeHtml(r.users.join(' · '))}</span>`;
+    const indicator = count === 0
+      ? ''
+      : `<span class="room-indicator" aria-label="${count} in this room"></span>`;
+    li.innerHTML = `
+      <div class="room-main">
+        <div class="room-name">${escapeHtml(r.name)}</div>
+        <div class="room-meta">${occupants}</div>
+      </div>
+      ${indicator}
+    `;
     list.appendChild(li);
   }
 }
@@ -142,7 +152,7 @@ async function joinRoom(room) {
   }
 
   state.room = room;
-  $('#room-title').textContent = `${room} · ${state.username}`;
+  $('#room-title').textContent = room;
   renderPeers();
   show('view-room');
   setStatus('connecting…');
@@ -289,20 +299,34 @@ function removePeer(id) {
   state.peers.delete(id);
 }
 
+function initials(name) {
+  const parts = String(name).trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '·';
+  if (parts.length === 1) return [...parts[0]].slice(0, 2).join('').toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 function renderPeers() {
   const list = $('#peers-list');
   list.innerHTML = '';
 
   const selfLi = document.createElement('li');
-  selfLi.className = 'self';
-  selfLi.innerHTML = `<span class="dot active"></span><span>${escapeHtml(state.username)} <small style="color:var(--text-dim)">(you)</small></span>`;
+  selfLi.className = 'peer-chip self active';
+  selfLi.innerHTML = `
+    <span class="peer-square" aria-hidden="true">${escapeHtml(initials(state.username))}</span>
+    <span class="peer-name">${escapeHtml(state.username)}<small class="peer-self-tag">you</small></span>
+  `;
   list.appendChild(selfLi);
 
   for (const [id, peer] of state.peers) {
     const li = document.createElement('li');
+    li.className = 'peer-chip' + (peer.active ? ' active' : '');
     li.dataset.peer = id;
-    const dot = peer.active ? 'dot active' : 'dot';
-    li.innerHTML = `<span class="${dot}"></span><span>${escapeHtml(peer.username || 'anon')}</span>`;
+    const name = peer.username || 'anon';
+    li.innerHTML = `
+      <span class="peer-square" aria-hidden="true">${escapeHtml(initials(name))}</span>
+      <span class="peer-name">${escapeHtml(name)}</span>
+    `;
     list.appendChild(li);
   }
 }
@@ -355,14 +379,32 @@ function postDsp(type, value) {
 
 function updateMeter(db, gain) {
   const bar = $('#meter-bar');
-  const thr = $('#meter-threshold');
   if (!bar) return;
-  // Map -80..0 dB to 0..100%
   const pct = Math.max(0, Math.min(100, ((db + 80) / 80) * 100));
-  bar.style.width = pct + '%';
-  bar.classList.toggle('open', gain > 0.5);
-  const tPct = Math.max(0, Math.min(100, ((state.dsp.threshold + 80) / 80) * 100));
-  thr.style.left = tPct + '%';
+  bar.style.setProperty('--level', pct + '%');
+  const open = gain > 0.5;
+  bar.classList.toggle('open', state.dsp.gate && open);
+  const label = document.querySelector('.meter-state');
+  if (label) {
+    label.textContent = !state.dsp.gate
+      ? 'gate off'
+      : (open ? 'gate open' : 'gate closed');
+  }
+}
+
+function renderThreshold(v) {
+  v = Math.max(-80, Math.min(0, Math.round(v)));
+  state.dsp.threshold = v;
+  const thr = $('#meter-threshold');
+  const label = $('#dsp-threshold-value');
+  if (thr) {
+    thr.style.setProperty('--pos', ((v + 80) / 80 * 100) + '%');
+    thr.setAttribute('aria-valuenow', String(v));
+    thr.setAttribute('aria-valuetext', `${v} decibels`);
+  }
+  if (label) label.textContent = (v >= 0 ? '' : '−') + Math.abs(v);
+  try { localStorage.setItem('voicechat:threshold', String(v)); } catch {}
+  postDsp('threshold', v);
 }
 
 function escapeHtml(s) {
@@ -394,19 +436,26 @@ function leave() {
   state.localStream = null;
   state.room = null;
   state.muted = false;
-  $('#mute-btn').classList.remove('muted');
-  $('#mute-btn').textContent = 'Mute';
+  setMuteButton(false);
 
   state.leaving = false;
   goToRooms();
 }
 
+function setMuteButton(muted) {
+  const btn = $('#mute-btn');
+  if (!btn) return;
+  btn.classList.toggle('muted', muted);
+  const label = btn.querySelector('.btn-label');
+  const sub = btn.querySelector('.btn-sub');
+  if (label) label.textContent = muted ? 'unmute' : 'mute';
+  if (sub) sub.textContent = muted ? 'nobody can hear you' : 'everyone can hear you';
+}
+
 function toggleMute() {
   state.muted = !state.muted;
   state.localStream?.getAudioTracks().forEach((t) => (t.enabled = !state.muted));
-  const btn = $('#mute-btn');
-  btn.classList.toggle('muted', state.muted);
-  btn.textContent = state.muted ? 'Unmute' : 'Mute';
+  setMuteButton(state.muted);
 }
 
 // -------- init --------
@@ -415,16 +464,12 @@ initName();
 $('#leave-btn').addEventListener('click', leave);
 $('#mute-btn').addEventListener('click', toggleMute);
 
-// DSP controls
+// DSP toggles
 const rnToggle = $('#dsp-rnnoise');
 const gateToggle = $('#dsp-gate');
-const thrSlider = $('#dsp-threshold');
-const thrValue = $('#dsp-threshold-value');
 
 rnToggle.checked = state.dsp.rnnoise;
 gateToggle.checked = state.dsp.gate;
-thrSlider.value = state.dsp.threshold;
-thrValue.textContent = `${state.dsp.threshold} dB`;
 
 rnToggle.addEventListener('change', () => {
   state.dsp.rnnoise = rnToggle.checked;
@@ -435,14 +480,62 @@ gateToggle.addEventListener('change', () => {
   state.dsp.gate = gateToggle.checked;
   localStorage.setItem('voicechat:gate', gateToggle.checked ? '1' : '0');
   postDsp('gate', gateToggle.checked);
+  document.getElementById('meter').classList.toggle('inert', !gateToggle.checked);
 });
-thrSlider.addEventListener('input', () => {
-  const v = Number(thrSlider.value);
-  state.dsp.threshold = v;
-  thrValue.textContent = `${v} dB`;
-  localStorage.setItem('voicechat:threshold', String(v));
-  postDsp('threshold', v);
-});
+document.getElementById('meter').classList.toggle('inert', !state.dsp.gate);
+
+// Threshold: draggable handle on the meter
+renderThreshold(state.dsp.threshold);
+{
+  const meter = $('#meter');
+  const handle = $('#meter-threshold');
+
+  function dbFromClientX(clientX) {
+    const rect = meter.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    return Math.round(pct * 80 - 80);
+  }
+
+  let dragging = false;
+  const startDrag = (e) => {
+    if (!state.dsp.gate) return;
+    dragging = true;
+    try { handle.setPointerCapture(e.pointerId); } catch {}
+    renderThreshold(dbFromClientX(e.clientX));
+    e.preventDefault();
+  };
+  const moveDrag = (e) => {
+    if (!dragging) return;
+    renderThreshold(dbFromClientX(e.clientX));
+  };
+  const endDrag = (e) => {
+    dragging = false;
+    try { handle.releasePointerCapture(e.pointerId); } catch {}
+  };
+  handle.addEventListener('pointerdown', startDrag);
+  handle.addEventListener('pointermove', moveDrag);
+  handle.addEventListener('pointerup', endDrag);
+  handle.addEventListener('pointercancel', endDrag);
+
+  // Tap elsewhere on the meter jumps the handle
+  meter.addEventListener('pointerdown', (e) => {
+    if (!state.dsp.gate) return;
+    if (e.target === handle || handle.contains(e.target)) return;
+    renderThreshold(dbFromClientX(e.clientX));
+  });
+
+  handle.addEventListener('keydown', (e) => {
+    const step = e.shiftKey ? 5 : 1;
+    let v = state.dsp.threshold;
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') v -= step;
+    else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') v += step;
+    else if (e.key === 'Home') v = -80;
+    else if (e.key === 'End') v = 0;
+    else return;
+    e.preventDefault();
+    renderThreshold(v);
+  });
+}
 
 $('#dsp-toggle').addEventListener('click', () => {
   $('#dsp-panel').classList.toggle('open');

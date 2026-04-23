@@ -3,64 +3,110 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>voicechat</title>
+    <meta name="color-scheme" content="light dark" />
+    <title>wiwave</title>
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
     <main id="app">
+      <div class="wordmark">wiwave</div>
+
       <!-- name view -->
       <section id="view-name" class="view">
-        <h1>voicechat</h1>
-        <label>
-          Your name
+        <h1 class="view-title">say your name</h1>
+        <p class="view-lede">it's what everyone on your wi-fi will see.</p>
+        <label class="field">
+          <span class="field-label">name</span>
           <input id="name-input" type="text" autocomplete="off" maxlength="32" placeholder="e.g. alex" />
         </label>
-        <button id="name-continue">Continue</button>
+        <button id="name-continue" class="btn btn-primary">continue</button>
       </section>
 
       <!-- rooms view -->
       <section id="view-rooms" class="view hidden">
         <div class="header">
-          <span id="rooms-header-name"></span>
-          <button id="name-change" class="link">change name</button>
+          <span class="header-lede">
+            <span class="dim">you are</span><span id="rooms-header-name"></span>
+          </span>
+          <button id="name-change" class="btn-text">change</button>
         </div>
-        <h2>Pick a room</h2>
-        <ul id="rooms-list"></ul>
+        <h2 class="section-heading">rooms</h2>
+        <ul id="rooms-list" class="stack"></ul>
       </section>
 
       <!-- room view -->
       <section id="view-room" class="view hidden">
         <div class="header">
-          <span id="room-title"></span>
-          <button id="leave-btn" class="link">leave</button>
+          <span class="header-lede">
+            <span class="dim">in</span><span id="room-title"></span>
+          </span>
+          <button id="leave-btn" class="btn-text">leave</button>
         </div>
-        <ul id="peers-list"></ul>
+
+        <ul id="peers-list" class="peer-strip"></ul>
+
+        <section class="meter-block">
+          <div class="meter-label">
+            <span>input</span>
+            <span class="meter-state">gate closed</span>
+          </div>
+          <div id="meter" class="meter">
+            <div id="meter-bar"></div>
+            <div class="meter-ticks" aria-hidden="true">
+              <span style="left:25%">&minus;60</span>
+              <span style="left:50%">&minus;40</span>
+              <span style="left:75%">&minus;20</span>
+            </div>
+            <div
+              id="meter-threshold"
+              tabindex="0"
+              role="slider"
+              aria-label="Noise gate threshold"
+              aria-valuemin="-80"
+              aria-valuemax="0"
+              aria-valuenow="-50"
+              aria-valuetext="minus 50 decibels"
+            >
+              <span id="dsp-threshold-value" class="meter-threshold-label">&minus;50</span>
+            </div>
+          </div>
+        </section>
+
         <div class="controls">
-          <button id="mute-btn">Mute</button>
-          <button id="dsp-toggle" class="link">Audio</button>
+          <button id="mute-btn" class="btn btn-primary btn-lg">
+            <span class="btn-label">mute</span>
+            <span class="btn-sub">everyone can hear you</span>
+          </button>
+          <button id="dsp-toggle" class="btn-text">audio settings</button>
         </div>
 
         <div id="dsp-panel">
-          <label class="dsp-row">
-            <span>RNNoise</span>
-            <input id="dsp-rnnoise" type="checkbox" />
-            <small id="dsp-rnnoise-note"></small>
-          </label>
-          <label class="dsp-row">
-            <span>Noise gate</span>
-            <input id="dsp-gate" type="checkbox" />
-          </label>
-          <label class="dsp-row column">
-            <div class="dsp-row">
-              <span>Threshold</span>
-              <span id="dsp-threshold-value">-50 dB</span>
-            </div>
-            <input id="dsp-threshold" type="range" min="-80" max="0" step="1" value="-50" />
-            <div id="meter">
-              <div id="meter-bar"></div>
-              <div id="meter-threshold"></div>
-            </div>
-          </label>
+          <div class="panel-grid">
+            <h3 class="panel-heading">audio</h3>
+
+            <label class="toggle-row">
+              <span class="toggle-text">
+                <span class="toggle-name">neural denoise</span>
+                <small class="toggle-desc">removes steady background noise</small>
+                <small id="dsp-rnnoise-note" class="toggle-note"></small>
+              </span>
+              <span class="toggle-wrap">
+                <input id="dsp-rnnoise" type="checkbox" class="toggle-input" />
+                <span class="toggle-track"></span>
+              </span>
+            </label>
+
+            <label class="toggle-row">
+              <span class="toggle-text">
+                <span class="toggle-name">noise gate</span>
+                <small class="toggle-desc">mutes your mic below the threshold on the meter</small>
+              </span>
+              <span class="toggle-wrap">
+                <input id="dsp-gate" type="checkbox" class="toggle-input" />
+                <span class="toggle-track"></span>
+              </span>
+            </label>
+          </div>
         </div>
 
         <div id="status"></div>
