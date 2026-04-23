@@ -87,9 +87,20 @@ button.link:hover { color: var(--text); }
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
   margin-bottom: 24px;
   color: var(--text-dim);
   font-size: 14px;
+}
+.header > span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.header > button {
+  flex-shrink: 0;
 }
 
 ul { list-style: none; padding: 0; margin: 0; }
@@ -102,13 +113,24 @@ ul { list-style: none; padding: 0; margin: 0; }
   margin-bottom: 8px;
   cursor: pointer;
   transition: border-color 120ms;
+  min-width: 0;
 }
 #rooms-list li:hover { border-color: var(--accent); }
+#rooms-list li.placeholder {
+  color: var(--text-dim);
+  font-size: 14px;
+  cursor: default;
+  text-align: center;
+}
+#rooms-list li.placeholder:hover { border-color: var(--border); }
 #rooms-list .room-name { font-size: 15px; }
 #rooms-list .room-users {
   font-size: 13px;
   color: var(--text-dim);
   margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 #peers-list {
@@ -124,6 +146,14 @@ ul { list-style: none; padding: 0; margin: 0; }
   border-radius: 8px;
   margin-bottom: 6px;
   font-size: 15px;
+  min-width: 0;
+}
+#peers-list li > span:last-child {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 #peers-list li.self {
   border-color: var(--accent);

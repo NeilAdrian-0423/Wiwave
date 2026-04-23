@@ -11,17 +11,24 @@ const state = {
   workletNode: null,
   peers: new Map(), // peerId -> { pc, username, audioEl, active }
   muted: false,
+  joining: false,
+  leaving: false,
   dsp: {
-    rnnoise: loadPref('voicechat:rnnoise', true),
-    gate: loadPref('voicechat:gate', true),
-    threshold: Number(localStorage.getItem('voicechat:threshold') ?? -50),
+    rnnoise: loadBoolPref('voicechat:rnnoise', true),
+    gate: loadBoolPref('voicechat:gate', true),
+    threshold: loadThresholdPref(),
   },
 };
 
-function loadPref(key, fallback) {
+function loadBoolPref(key, fallback) {
   const v = localStorage.getItem(key);
   if (v === null) return fallback;
   return v === '1' || v === 'true';
+}
+
+function loadThresholdPref() {
+  const v = Number(localStorage.getItem('voicechat:threshold'));
+  return Number.isFinite(v) && v >= -80 && v <= 0 ? v : -50;
 }
 
 const $ = (sel) => document.querySelector(sel);
@@ -62,20 +69,33 @@ function initName() {
 let roomsPollTimer = null;
 
 async function refreshRooms() {
+  const list = $('#rooms-list');
   let rooms;
   try {
     const res = await fetch('/api/rooms');
+    if (!res.ok) throw new Error(`status ${res.status}`);
     rooms = await res.json();
+    if (!Array.isArray(rooms)) throw new Error('bad payload');
   } catch {
+    if (!list.querySelector('li:not(.placeholder)')) {
+      list.innerHTML = '<li class="placeholder">Can\'t reach the server — retrying…</li>';
+    }
     return;
   }
-  const list = $('#rooms-list');
+
+  if (rooms.length === 0) {
+    list.innerHTML = '<li class="placeholder">No rooms configured.</li>';
+    return;
+  }
+
   list.innerHTML = '';
   for (const r of rooms) {
     const li = document.createElement('li');
     li.addEventListener('click', () => joinRoom(r.name));
     const count = r.users.length;
-    const summary = count === 0 ? 'empty' : `${count} · ${r.users.map(escapeHtml).join(', ')}`;
+    const summary = count === 0
+      ? 'empty'
+      : `${count} · ${r.users.map(escapeHtml).join(', ')}`;
     li.innerHTML = `<div class="room-name">${escapeHtml(r.name)}</div><div class="room-users">${summary}</div>`;
     list.appendChild(li);
   }
@@ -99,6 +119,9 @@ async function goToRooms() {
 // -------- room / webrtc --------
 
 async function joinRoom(room) {
+  if (state.joining || state.room) return;
+  state.joining = true;
+
   setStatus('requesting microphone…');
   try {
     state.localStream = await navigator.mediaDevices.getUserMedia({
@@ -106,6 +129,7 @@ async function joinRoom(room) {
       video: false,
     });
   } catch (err) {
+    state.joining = false;
     alert('Microphone access was denied: ' + err.message);
     return;
   }
@@ -129,9 +153,20 @@ async function joinRoom(room) {
   ws.addEventListener('open', () => {
     ws.send(JSON.stringify({ type: 'join', room, username: state.username }));
   });
-  ws.addEventListener('message', (ev) => onSignal(JSON.parse(ev.data)));
-  ws.addEventListener('close', () => setStatus('disconnected'));
+  ws.addEventListener('message', (ev) => {
+    try { onSignal(JSON.parse(ev.data)); } catch {}
+  });
+  ws.addEventListener('close', () => {
+    if (state.room && !state.leaving) {
+      setStatus('disconnected from server');
+      leave();
+    } else {
+      setStatus('disconnected');
+    }
+  });
   ws.addEventListener('error', () => setStatus('connection error'));
+
+  state.joining = false;
 }
 
 async function onSignal(msg) {
@@ -341,11 +376,14 @@ function setStatus(s) {
 }
 
 function leave() {
+  if (state.leaving) return;
+  state.leaving = true;
+
   try { state.ws?.send(JSON.stringify({ type: 'leave' })); } catch {}
   try { state.ws?.close(); } catch {}
   state.ws = null;
 
-  for (const [id] of state.peers) removePeer(id);
+  for (const [id] of [...state.peers]) removePeer(id);
 
   try { state.workletNode?.disconnect(); } catch {}
   state.workletNode = null;
@@ -358,7 +396,8 @@ function leave() {
   state.muted = false;
   $('#mute-btn').classList.remove('muted');
   $('#mute-btn').textContent = 'Mute';
-  setStatus('');
+
+  state.leaving = false;
   goToRooms();
 }
 
@@ -409,8 +448,19 @@ $('#dsp-toggle').addEventListener('click', () => {
   $('#dsp-panel').classList.toggle('open');
 });
 
-window.addEventListener('beforeunload', () => {
+// Mobile browsers often skip `beforeunload`; `pagehide` fires reliably.
+function sendLeaveBeacon() {
   try { state.ws?.send(JSON.stringify({ type: 'leave' })); } catch {}
+}
+window.addEventListener('beforeunload', sendLeaveBeacon);
+window.addEventListener('pagehide', sendLeaveBeacon);
+
+// Backgrounding the tab on mobile suspends the AudioContext. Resume when
+// the user returns, otherwise the worklet silently stops processing.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && state.audioCtx?.state === 'suspended') {
+    state.audioCtx.resume().catch(() => {});
+  }
 });
 
 if (state.username) goToRooms();
