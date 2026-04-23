@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>voicechat</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main id="app">
+      <!-- name view -->
+      <section id="view-name" class="view">
+        <h1>voicechat</h1>
+        <label>
+          Your name
+          <input id="name-input" type="text" autocomplete="off" maxlength="32" placeholder="e.g. alex" />
+        </label>
+        <button id="name-continue">Continue</button>
+      </section>
+
+      <!-- rooms view -->
+      <section id="view-rooms" class="view hidden">
+        <div class="header">
+          <span id="rooms-header-name"></span>
+          <button id="name-change" class="link">change name</button>
+        </div>
+        <h2>Pick a room</h2>
+        <ul id="rooms-list"></ul>
+      </section>
+
+      <!-- room view -->
+      <section id="view-room" class="view hidden">
+        <div class="header">
+          <span id="room-title"></span>
+          <button id="leave-btn" class="link">leave</button>
+        </div>
+        <ul id="peers-list"></ul>
+        <div class="controls">
+          <button id="mute-btn">Mute</button>
+          <button id="dsp-toggle" class="link">Audio</button>
+        </div>
+
+        <div id="dsp-panel">
+          <label class="dsp-row">
+            <span>RNNoise</span>
+            <input id="dsp-rnnoise" type="checkbox" />
+            <small id="dsp-rnnoise-note"></small>
+          </label>
+          <label class="dsp-row">
+            <span>Noise gate</span>
+            <input id="dsp-gate" type="checkbox" />
+          </label>
+          <label class="dsp-row column">
+            <div class="dsp-row">
+              <span>Threshold</span>
+              <span id="dsp-threshold-value">-50 dB</span>
+            </div>
+            <input id="dsp-threshold" type="range" min="-80" max="0" step="1" value="-50" />
+            <div id="meter">
+              <div id="meter-bar"></div>
+              <div id="meter-threshold"></div>
+            </div>
+          </label>
+        </div>
+
+        <div id="status"></div>
+      </section>
+
+      <div id="audio-sink"></div>
+    </main>
+    <script src="client.js" type="module"></script>
+  </body>
+</html>
